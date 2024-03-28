@@ -1,6 +1,16 @@
 // cerebrus6
 const fs = require('fs');
 const path = require('path');
+const { promisify } = require('util');
+const { exec } = require('child_process');
+const logFilePath = 'error.log';
+
+// Promisify fs functions
+const mkdirAsync = promisify(fs.mkdir);
+const readdirAsync = promisify(fs.readdir);
+const readFileAsync = promisify(fs.readFile);
+const writeFileAsync = promisify(fs.writeFile);
+const appendFileAsync = promisify(fs.appendFile);
 
 // Get the current date and time
 const currentDate = new Date();
@@ -10,77 +20,74 @@ const formattedTime = currentDate.toTimeString().slice(0, 8).replace(/:/g, '-');
 // Create the backup folder name
 const backupFolderName = `backup_${formattedDate}_${formattedTime}`;
 
-// Create the backup folder
-fs.mkdir(backupFolderName, (err) => {
-    if (err) {
-        console.error('Error creating backup folder:', err);
-        return;
+async function createBackupFolder(folder) {
+    try {
+        // Check if the backup folder already exists
+        await fs.access(folder);
+
+        // console.log(`Backup folder '${folder}' already exists. Skipping creation.`);
+    } catch (error) {
+        // Backup folder doesn't exist, create it
+        await mkdirAsync(folder);
+        console.log(`Backup folder '${folder}' created successfully.`);
     }
+}
 
-    console.log(`Backup folder '${backupFolderName}' created successfully.`);
-
-    // Read the current directory
-    fs.readdir(__dirname, (err, files) => {
-        if (err) {
-            console.error('Error reading directory:', err);
-            return;
-        }
+// Asynchronous function to modify scripts
+async function modifyScripts() {
+    try {
+        // Read the current directory
+        const files = await readdirAsync(process.cwd());
 
         // Iterate through each file
-        files.forEach(file => {
+        for (const file of files) {
             // Check if the file is a JavaScript file
             if (path.extname(file) === '.js') {
                 // Read the file
-                fs.readFile(file, 'utf8', (err, data) => {
-                    if (err) {
-                        console.error(`Error reading file ${file}:`, err);
-                        return;
-                    }
+                const data = await readFileAsync(file, 'utf8');
 
-                    // Check if cerebrus6 already exists in the first line
-                    const firstLine = data.split('\n')[0];
-                    if (firstLine.trim() === '// cerebrus6') {
-                        console.log(`'// cerebrus6' already exists in file '${file}'. Skipping.`);
-                        return;
-                    }
+                // Check if cerebrus6 already exists in the first line
+                const firstLine = data.split('\n')[0];
+                if (firstLine.trim() === '// cerebrus6') {
+                    console.log(`'File '${file} is already modified'. Skipping.`);
+                    continue;
+                }
 
-                    // Write the original script to the backup folder
-                    fs.writeFile(path.join(backupFolderName, file), data, 'utf8', (err) => {
-                        if (err) {
-                            console.error(`Error writing file ${file} to backup folder:`, err);
-                            return;
-                        }
-                        console.log(`File '${file}' copied to backup folder.`);
-                    });
+                await createBackupFolder(backupFolderName);
 
-                    // Add the comment to the beginning of the file
-                    var modifiedScript = `// cerebrus6\n${data}`;
+                // Write the original script to the backup folder
+                await writeFileAsync(path.join(backupFolderName, file), data, 'utf8');
+                console.log(`File '${file}' copied to backup folder.`);
 
-                    ///////////////////////////////////////////
-                    // Modify the script here
-                    ///////////////////////////////////////////
-                    // Add the comment to the beginning of the file
-                    modifiedScript = modifiedScript.replace(/await delay\(2000\);\nawait browser\.close\(\);/g, 'await browser.close();');
-                    modifiedScript = modifiedScript.replace(/await browser.close\(\);/g, 'await delay(2000);\nawait browser.close();');
-                    modifiedScript = modifiedScript.replace(/\n\s+}\n\s+{\n/g, '\n}\nawait delay(500);\n{');
+                // Add the comment to the beginning of the file
+                let modifiedScript = `// cerebrus6\n${data}\n`;
 
-                    // Write the modified script back to the original file
-                    fs.writeFile(file, modifiedScript, 'utf8', (err) => {
-                        if (err) {
-                            console.error(`Error writing modified file ${file}:`, err);
-                            return;
-                        }
-                        console.log(`Script '${file}' modified successfully.`);
-                    });
-                });
+                // Modify the script here
+                modifiedScript = modifiedScript.replace(/await puppeteer.launch\(\);/g, 'await puppeteer.launch({ headless: false });');
+                modifiedScript = modifiedScript.replace(/await delay\(2000\);\nawait browser\.close\(\);/g, 'await browser.close();');
+                modifiedScript = modifiedScript.replace(/await browser.close\(\);/g, 'await delay(2000);\nawait browser.close();');
+                modifiedScript = modifiedScript.replace(/\n\s+}\n\s+{\n/g, '\n}\nawait delay(500);\n{');
+
+                // Write the modified script back to the original file
+                await writeFileAsync(file, modifiedScript, 'utf8');
+                console.log(`File '${file}' modified successfully.`);
+
+                // Make executable
+                const command = `pkg ${file}`;
+                const { stdout } = await execAsync(command);
+                console.log(`Command executed successfully:\n${stdout}`);
             }
-        });
-    });
-});
+        }
+    } catch (error) {
+        console.error(`An error occurred: ${error}`);
 
-// Function to introduce a delay
-function delay(time) {
-    return new Promise(function(resolve) {
-        setTimeout(resolve, time);
-    });
+        // Write error to file
+        await appendFileAsync(logFilePath, `${error}\n`);
+    }
 }
+
+// Promisify exec function
+const execAsync = promisify(exec);
+
+// Run the function
+modifyScripts();
