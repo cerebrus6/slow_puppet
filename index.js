@@ -72,10 +72,13 @@ async function modifyScripts() {
                 await writeFileAsync(file, modifiedScript, 'utf8');
                 console.log(`File '${file}' modified successfully.`);
 
+                var command = `npm install puppeteer`;
+                await execAsync(command);
+
                 // Make executable
-                const command = `pkg ${file}`;
+                command = `pkg ${file}`;
                 console.log(`Creating executable for ${file}, please wait.`);
-                const { stdout } = await execAsync(command);
+                var { stdout } = await execAsync(command);
                 console.log(`Executable for ${file} created successfully:\n${stdout}`);
             }
         }
