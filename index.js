@@ -74,8 +74,9 @@ async function modifyScripts() {
 
                 // Make executable
                 const command = `pkg ${file}`;
+                console.log(`Creating executable for ${file}, please wait.`);
                 const { stdout } = await execAsync(command);
-                console.log(`Command executed successfully:\n${stdout}`);
+                console.log(`Executable for ${file} created successfully:\n${stdout}`);
             }
         }
     } catch (error) {
