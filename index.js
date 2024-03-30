@@ -39,6 +39,11 @@ async function modifyScripts() {
         // Read the current directory
         const files = await readdirAsync(process.cwd());
 
+        await createBackupFolder(backupFolderName);
+
+        var command = `npm install puppeteer`;
+        await execAsync(command);
+
         // Iterate through each file
         for (const file of files) {
             // Check if the file is a JavaScript file
@@ -53,16 +58,22 @@ async function modifyScripts() {
                     continue;
                 }
 
-                await createBackupFolder(backupFolderName);
-
                 // Write the original script to the backup folder
                 await writeFileAsync(path.join(backupFolderName, file), data, 'utf8');
                 console.log(`File '${file}' copied to backup folder.`);
 
                 // Add the comment to the beginning of the file
-                let modifiedScript = `// cerebrus6\n${data}\n`;
-
                 // Modify the script here
+                let modifiedScript = `
+function delay(time) {
+    return new Promise(function(resolve) {
+        setTimeout(resolve, time);
+    });
+}
+\n${data}`;
+
+                modifiedScript = `// cerebrus6\n${modifiedScript}\n`;
+
                 modifiedScript = modifiedScript.replace(/await puppeteer.launch\(\);/g, 'await puppeteer.launch({ headless: false });');
                 modifiedScript = modifiedScript.replace(/await delay\(2000\);\nawait browser\.close\(\);/g, 'await browser.close();');
                 modifiedScript = modifiedScript.replace(/await browser.close\(\);/g, 'await delay(2000);\nawait browser.close();');
@@ -71,9 +82,6 @@ async function modifyScripts() {
                 // Write the modified script back to the original file
                 await writeFileAsync(file, modifiedScript, 'utf8');
                 console.log(`File '${file}' modified successfully.`);
-
-                var command = `npm install puppeteer`;
-                await execAsync(command);
 
                 // Make executable
                 command = `pkg ${file}`;
